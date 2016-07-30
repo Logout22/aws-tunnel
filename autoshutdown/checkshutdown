@@ -1,0 +1,2 @@
+# /etc/cron.d/checkshutdown
+* */1 * * * root /usr/local/sbin/checkshutdown.sh
