@@ -3,8 +3,9 @@
 set -e
 set -u
 
-OUTPUT=$(./start-tunnel.sh) || exit $?
+SCRIPTDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+OUTPUT=$("$SCRIPTDIR/start-tunnel.sh") || exit $?
 HOSTNAME=$(echo "$OUTPUT" | awk '/INSTANCE/ { print $4 }') || exit $?
 echo "Host name: $HOSTNAME"
 echo
-./open-tunnel.sh "$HOSTNAME" "$@"
+"$SCRIPTDIR/open-tunnel.sh" "$HOSTNAME" "$@"

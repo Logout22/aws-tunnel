@@ -3,5 +3,6 @@
 set -e
 set -u
 
-. credentials.sh
+SCRIPTDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+. "$SCRIPTDIR/credentials.sh"
 ec2-stop-instances --region eu-west-1 "$INSTANCEID"
