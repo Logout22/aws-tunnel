@@ -16,12 +16,12 @@ function check_prerequisites() {
         exit 1
     fi
     if [[ $(stat -c %A "$TUNNELCERT") != "-r--------" ]]; then
-        echo "Permissions on certificate '$TUNNELCERT' are too open. Please change to 400."
+        echo "Permissions on certificate '$TUNNELCERT' are insecure. Please change to 400."
         exit 1
     fi
     if ! aws --version >/dev/null; then
         echo Please install the AWS CLI using
-        echo pip2 install --upgrade --user awscli
+        echo pip install --upgrade --user awscli
         exit 5
     fi
     if ! python3 -c "import json"; then
