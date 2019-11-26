@@ -67,11 +67,14 @@ function get_instance_host_name() {
 function wait_for_instance() {
     local STATEJSON
     local STATE
+    local WAITING_INTERVAL=1
     while [[ $STATE != "running" ]]; do
         STATEJSON=$(get_instance_description || exit)
         STATE=$(echo "$STATEJSON" | get_instance_state || exit)
         INSTANCEHOSTNAME=$(echo "$STATEJSON" | get_instance_host_name || exit)
-        sleep 30
+        echo Waiting for $WAITING_INTERVAL seconds...
+        sleep $WAITING_INTERVAL
+        WAITING_INTERVAL=$((WAITING_INTERVAL * 2))
     done
 }
 
