@@ -2,7 +2,7 @@
 
 set -e
 
-INSTANCETYPE=t2.nano
+INSTANCETYPE=t3.nano
 AWSKEYNAME=Tunnel
 TUNNELCERT=$AWSKEYNAME.pem
 
@@ -13,6 +13,10 @@ function check_prerequisites() {
     fi
     if [[ ! -f "$TUNNELCERT" ]]; then
         echo "Please provide a certificate for logging into the new instance ($TUNNELCERT)."
+        exit 1
+    fi
+    if [[ $(stat -c %A "$TUNNELCERT") != "-r--------" ]]; then
+        echo "Permissions on certificate '$TUNNELCERT' are too open. Please change to 400."
         exit 1
     fi
     if ! aws --version >/dev/null; then
@@ -40,7 +44,8 @@ function launch_instance() {
     aws ec2 run-instances --profile "$PROFILE" \
         --image-id "$AWSLINUXAMI" \
         --instance-type "$INSTANCETYPE" \
-        --key-name "$AWSKEYNAME"
+        --key-name "$AWSKEYNAME" \
+        --output json
 }
 
 function get_instance_id() {
@@ -48,7 +53,7 @@ function get_instance_id() {
 }
 
 function get_instance_description() {
-    aws ec2 describe-instances --profile "$PROFILE" --instance-ids "$INSTANCEID"
+    aws ec2 describe-instances --profile "$PROFILE" --instance-ids "$INSTANCEID" --output json
 }
 
 function get_instance_state() {
@@ -66,7 +71,7 @@ function wait_for_instance() {
         STATEJSON=$(get_instance_description || exit)
         STATE=$(echo "$STATEJSON" | get_instance_state || exit)
         INSTANCEHOSTNAME=$(echo "$STATEJSON" | get_instance_host_name || exit)
-        sleep 60
+        sleep 30
     done
 }
 
