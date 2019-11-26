@@ -1,6 +1,6 @@
 #! /bin/bash
 
-set -e
+set -o nounset
 
 INSTANCETYPE=t3.nano
 AWSKEYNAME=Tunnel
@@ -40,6 +40,13 @@ function retrieve_ami() {
     fi
 }
 
+function terminate_instance() {
+    echo "Shutting down image."
+    rm -f "$SHOULD_RUN_FILE"
+    trap - INT QUIT TERM EXIT
+    aws ec2 terminate-instances --profile "$PROFILE" --instance-ids "$INSTANCEID" > /dev/null
+}
+
 function launch_instance() {
     aws ec2 run-instances --profile "$PROFILE" \
         --image-id "$AWSLINUXAMI" \
@@ -64,26 +71,43 @@ function get_instance_host_name() {
     python3 -c "import sys, json; print(json.load(sys.stdin)['Reservations'][0]['Instances'][0]['PublicDnsName'])"
 }
 
-function wait_for_instance() {
-    local STATEJSON
-    local STATE
+function retry_command() {
+    local COMMAND=$1
+    local RETRIES=0
+    local MAX_RETRIES=7
     local WAITING_INTERVAL=1
-    while [[ $STATE != "running" ]]; do
-        STATEJSON=$(get_instance_description || exit)
-        STATE=$(echo "$STATEJSON" | get_instance_state || exit)
-        INSTANCEHOSTNAME=$(echo "$STATEJSON" | get_instance_host_name || exit)
+    local RETURN_CODE=1
+    while true; do
+        $COMMAND
+        RETURN_CODE=$?
+        if [[ $RETURN_CODE -eq 0 ]]; then
+            return 0
+        fi
+        if ! [[ -f "$SHOULD_RUN_FILE" ]]; then
+            exit 30
+        fi
+        RETRIES=$((RETRIES + 1))
+        if [[ $RETRIES -gt $MAX_RETRIES ]]; then
+            exit 40
+        fi
         echo Waiting for $WAITING_INTERVAL seconds...
         sleep $WAITING_INTERVAL
         WAITING_INTERVAL=$((WAITING_INTERVAL * 2))
     done
+    return $RETURN_CODE
+}
+
+function get_instance() {
+    local STATEJSON=
+    local STATE=
+    STATEJSON=$(get_instance_description) || exit
+    STATE=$(echo "$STATEJSON" | get_instance_state) || exit
+    INSTANCEHOSTNAME=$(echo "$STATEJSON" | get_instance_host_name) || exit
+    [[ $STATE = "running" ]]
 }
 
 function open_tunnel() {
     ssh -D "$PROXYPORT" -i "$TUNNELCERT" ec2-user@"$INSTANCEHOSTNAME"
-}
-
-function terminate_instance() {
-    aws ec2 terminate-instances --profile "$PROFILE" --instance-ids "$INSTANCEID" > /dev/null
 }
 
 check_prerequisites "$1"
@@ -91,11 +115,12 @@ PROFILE=$1
 PROXYPORT=${2:-8080}
 retrieve_ami
 
-INSTANCEID=$(launch_instance | get_instance_id || exit)
-INSTANCEHOSTNAME=
+INSTANCEID=$(launch_instance | get_instance_id) || exit
 echo "Launching instance with id $INSTANCEID"
-wait_for_instance "$INSTANCEID"
+trap terminate_instance INT QUIT TERM EXIT
+SHOULD_RUN_FILE=$(mktemp) || exit
+INSTANCEHOSTNAME=
+retry_command "get_instance $INSTANCEID" || exit
 echo "Instance successfully launched. Opening SSH tunnel to $INSTANCEHOSTNAME."
-open_tunnel
-echo "Tunnel closed, shutting down image."
-terminate_instance
+retry_command open_tunnel || exit
+echo "Tunnel closed."
