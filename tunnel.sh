@@ -6,6 +6,17 @@ INSTANCETYPE=t3.nano
 AWSKEYNAME=Tunnel
 TUNNELCERT=$AWSKEYNAME.pem
 
+function install_venv() {
+    if [[ ! -d ".venv" ]]; then
+        python3 -m venv .venv || exit
+    fi
+}
+
+function install_aws() {
+    pip install --upgrade pip || exit
+    pip install -r requirements.txt || exit
+}
+
 function check_prerequisites() {
     if [[ -z "$1" ]]; then
         echo Please select a configuration profile.
@@ -110,6 +121,11 @@ function open_tunnel() {
     ssh -D "$PROXYPORT" -i "$TUNNELCERT" ec2-user@"$INSTANCEHOSTNAME"
 }
 
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+cd "$SCRIPT_DIR" || exit
+install_venv
+source .venv/bin/activate || exit
+install_aws
 check_prerequisites "$1"
 PROFILE=$1
 PROXYPORT=${2:-8080}
